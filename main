@@ -1,0 +1,135 @@
+import sys, pygame
+from random import choice
+from random import randint
+pygame.mixer.pre_init(44100, -16, 1, 512) #pre_init vajalik, et helifailid toimiksid õigeaegselt
+pygame.mixer.init()
+pygame.init()
+
+bounce = pygame.mixer.Sound('bounce.ogg')
+size = width, height = 800, 600
+ballspeed = 7
+speed = [ballspeed, 0]
+black = 0, 0, 0
+reset_timer = True
+screen = pygame.display.set_mode(size)
+pygame.time.set_timer(pygame.USEREVENT, 1000)
+startupfont = pygame.font.SysFont("monospace", 60)
+skoori_font = pygame.font.SysFont("monospace", 60)
+ball = pygame.image.load("ball1.png")
+ping = pygame.image.load("ping.png")
+pong = pygame.image.load("pong.png")
+ballrect = ball.get_rect()
+pingrect = ping.get_rect()
+pongrect = pong.get_rect()
+ping_up = False
+ping_down = False
+pong_up = False
+pong_down = False
+#ping-pong ja pall õigesse asukohta
+pingrect = pingrect.move(0, (height/2) - (pingrect.height / 2))
+pongrect = pongrect.move(0, (height/2) - pongrect.height / 2)
+pongrect = pongrect.move(width - (pongrect.width), 0)
+ballrect = ballrect.move(0, (height/2) - (ballrect.height / 2))
+ballrect = ballrect.move(width/2 - (ballrect.width / 2), 0)
+pingpong_angle_factor = 17
+pingpong_speed = 4
+timer = 0
+FPS_kell = pygame.time.Clock()
+ping_skoor = 0
+pong_skoor = 0
+def juhtumite_haldus():
+    global timer
+    global ping_up
+    global ping_down
+    global pong_up
+    global pong_down #globaalsete muutujate käsitlus vajalik, sest ei soovi neid vähemalt praegusel hetkel paigutada muteeritavasse konteinerisse.
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            sys.exit()
+        if event.type == pygame.USEREVENT and timer <= 3:
+            timer -= 1
+            reset_timer = False
+            if timer <= 0:
+                reset_timer = True
+            if timer == 0:
+                speed[0] = choice((-6, 6))
+                speed[1] = randint(-3, 3)
+        if event.type == pygame.KEYDOWN: #siit andakse luba pingpongi liigutamiseks
+            if event.key == pygame.K_w:
+                ping_up = True
+            if event.key == pygame.K_s:
+                ping_down = True
+            if event.key == pygame.K_UP:
+                pong_up = True
+            if event.key == pygame.K_DOWN:
+                pong_down = True
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_w:
+                ping_up = False
+            if event.key == pygame.K_s:
+                ping_down = False
+            if event.key == pygame.K_UP:
+                pong_up = False
+            if event.key == pygame.K_DOWN:
+                pong_down = False
+
+while 1:
+    juhtumite_haldus()
+
+    #takistamine ping-pongil ekraanist välja sõitmast
+    if ping_up == True and pingrect.top > 0:
+        pingrect = pingrect.move(0,-pingpong_speed)
+    if ping_down == True and pingrect.bottom < height:
+        pingrect = pingrect.move(0,pingpong_speed)
+    if pong_up == True and pongrect.top > 0:
+        pongrect = pongrect.move(0,-pingpong_speed)
+    if pong_down == True and pongrect.bottom < height:
+        pongrect = pongrect.move(0,pingpong_speed)
+    #collision checks ja palli suunamuutmine
+    if (ballrect.colliderect(pingrect)) and speed[0] < 0:
+        bounce.play()
+        collision_delta = ballrect.centery - pingrect.centery
+        speed[0] = -speed[0]
+        speed[1] = collision_delta / pingpong_angle_factor #ajab asja ära, aga seda on raske paremaks timmida, sest ping/pongi keskele jääks kas liiga suur deadzone või
+        #nurk oleks liiga väike. Kuidas põrkenurka paremini kalkuleerida, et ta suureneks proportsionaalselt mida kaugemele ping/pongi keskkohast jääb?
+    if (ballrect.colliderect(pongrect)) and speed[0] > 0:
+        bounce.play()
+        collision_delta = ballrect.centery - pongrect.centery
+        speed[0] = -speed[0]
+        speed[1] = collision_delta / pingpong_angle_factor
+    #Kui pall puudutab ülemist või alumist serva, mängi bounce ja vaheta y suuna vastupidiseks
+    if ballrect.top < 0 or ballrect.bottom > height:
+        bounce.play()
+        speed[1] = -speed[1]
+
+
+    taimeritekst = startupfont.render("", True, (255, 255, 255)) #Ei kuva taimerit. Teatud tingimustel järgevas koodis taimeritekst siiski kuvatakse
+
+    #Punktiskoori uuendamine ja palli positsiooni ja kiiruse seadmine peale seda kui too on ühest ekraaniservast väljunud
+    if ballrect.right < 0 or ballrect.left > width:
+        if ballrect.right < 0:
+            pong_skoor += 1
+        elif ballrect.left > width:
+            ping_skoor += 1
+        ballrect.x = width / 2
+        ballrect.y = height / 2
+        speed[0] = 0
+        speed[1] = 0
+    #Kui pall on seiskunud täielikult, siis see on märk, et on aeg kuvada taimeri palli taas-lennutamiseks
+    if speed[0] == 0 and speed[1] == 0:
+        taimeritekst = startupfont.render(str(timer), True, (255, 255, 255))
+        if reset_timer == True and timer <= 0:
+            timer = 3
+    pingskoortekst = skoori_font.render(str(ping_skoor), True, (255, 255, 255))
+    pongskoortekst = skoori_font.render(str(pong_skoor), True, (255, 255, 255))
+    ballrect = ballrect.move(speed)
+    screen.fill(black)
+    screen.blit(ball, ballrect)
+    screen.blit(ping, pingrect)
+    screen.blit(pingskoortekst, (width / 3, height / 6))
+    screen.blit(pongskoortekst, (((width / 3) * 2), height / 6))
+    screen.blit(taimeritekst, (width / 2, height / 3))
+    screen.blit(pong, pongrect)
+
+    pygame.display.flip()
+    FPS_kell.tick_busy_loop(120)
